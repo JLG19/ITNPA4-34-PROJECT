@@ -1,0 +1,96 @@
+import streamlit as st
+import re
+import pickle
+
+from nltk.corpus import stopwords
+from nltk.stem import WordNetLemmatizer
+from tensorflow.keras.models import load_model
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+
+
+# Load model and files
+model = load_model("researchly_model.keras")
+
+with open("tokenizer.pkl", "rb") as file:
+    tokenizer = pickle.load(file)
+
+with open("encoder.pkl", "rb") as file:
+    encoder = pickle.load(file)
+
+with open("max_len.pkl", "rb") as file:
+    max_len = pickle.load(file)
+
+
+# Preprocess the abstract
+def preprocess_text(text):
+
+    stop_words = set(stopwords.words("english"))
+    lemmatizer = WordNetLemmatizer()
+
+    text = text.lower()
+    text = re.sub(r'[^\w\s]', '', text)
+
+    text = " ".join(
+        word for word in text.split()
+        if word not in stop_words
+    )
+
+    text = " ".join(
+        lemmatizer.lemmatize(word)
+        for word in text.split()
+    )
+
+    sequence = tokenizer.texts_to_sequences([text])
+
+    padded = pad_sequences(
+        sequence,
+        maxlen=max_len
+    )
+
+    return padded
+
+
+# Heading
+st.title("Researchly Research Abstract Classifier")
+
+st.write(
+    "This app classifies research abstracts as either "
+    "AI related or classical research."
+)
+
+
+# Input
+abstract = st.text_area("Enter research abstract:")
+
+
+# Button
+if st.button("Classify Abstract"):
+
+    if abstract.strip() == "":
+        st.warning("Please enter a research abstract.")
+
+    else:
+        processed_text = preprocess_text(abstract)
+
+        prediction = model.predict(
+            processed_text,
+            verbose=0
+        )
+
+        predicted_class = int(prediction[0][0] >= 0.5)
+
+        predicted_label = encoder.inverse_transform(
+            [predicted_class]
+        )[0]
+
+        if predicted_label == "ai":
+            predicted_label = "artificial intelligence"
+        else:
+            predicted_label = "classical research"
+
+        st.subheader("Prediction")
+
+        st.write(
+            "The abstract is classified as:",
+            predicted_label
+        )
